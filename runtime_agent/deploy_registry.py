@@ -1,20 +1,26 @@
 import logging
 import threading
 import time
+from typing import Optional
 import requests
 
 from runtime_agent import settings
 
 log = logging.getLogger(__name__)
 
-_hb_stop: threading.Event | None = None
-_hb_thread: threading.Thread | None = None
+_hb_stop: Optional[threading.Event] = None
+_hb_thread: Optional[threading.Thread] = None
 
 
 def heartbeat() -> None:
+    """
+    上报一次 runtime 节点心跳（best-effort）。
+    """
     if not settings.DEPLOY_BASE_URL or not settings.DEPLOY_NODE_TOKEN:
+        log.warning("deploy heartbeat skipped: DEPLOY_BASE_URL/DEPLOY_NODE_TOKEN not configured")
         return
     if not settings.RUNTIME_NODE_AGENT_BASE_URL or not settings.RUNTIME_NODE_GATEWAY_BASE_URL:
+        log.warning("deploy heartbeat skipped: RUNTIME_NODE_AGENT_BASE_URL/RUNTIME_NODE_GATEWAY_BASE_URL not configured")
         return
 
     url = settings.DEPLOY_BASE_URL.rstrip("/") + "/internal/runtime-nodes/heartbeat"
@@ -25,7 +31,14 @@ def heartbeat() -> None:
         "gatewayBaseUrl": settings.RUNTIME_NODE_GATEWAY_BASE_URL,
     }
     # best effort
-    requests.post(url, json=body, headers=headers, timeout=3)
+    try:
+        r = requests.post(url, json=body, headers=headers, timeout=3)
+        if r.status_code >= 400:
+            log.warning("deploy heartbeat failed: status=%s body=%s", r.status_code, (r.text or "")[:300])
+        else:
+            log.info("deploy heartbeat ok: node=%s", settings.RUNTIME_NODE_NAME)
+    except Exception as e:
+        log.warning("deploy heartbeat exception: %s", e)
 
 
 def start_heartbeat_loop() -> None:
@@ -42,12 +55,14 @@ def start_heartbeat_loop() -> None:
         # 立即打一发，随后按间隔循环
         interval = int(getattr(settings, "DEPLOY_HEARTBEAT_SECONDS", 60) or 60)
         interval = 60 if interval <= 0 else interval
+        log.info(
+            "deploy heartbeat loop started: interval=%ss deployBaseUrl=%s node=%s",
+            interval,
+            settings.DEPLOY_BASE_URL,
+            settings.RUNTIME_NODE_NAME,
+        )
         while _hb_stop is not None and not _hb_stop.is_set():
-            try:
-                heartbeat()
-            except Exception as e:
-                # best-effort：不让线程死掉
-                log.warning("deploy heartbeat failed: %s", e)
+            heartbeat()
             # sleep with stop support
             end = time.time() + interval
             while _hb_stop is not None and not _hb_stop.is_set() and time.time() < end:
