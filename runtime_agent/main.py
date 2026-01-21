@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 
 from runtime_agent.auth import require_runtime_token
 from runtime_agent.deploy_ops import deploy_container, stop_container
@@ -67,6 +67,14 @@ def status(appId: str):
     name = container_name(appId)
     inspect = docker("inspect", name, timeout_sec=10)
     if inspect.code != 0:
+        # docker 不可用/daemon 不可达/权限问题：明确返回可读错误，避免“Internal Server Error”
+        err = (inspect.err or inspect.out or "").lower()
+        if inspect.code == 127 or "no such file" in err or "not found" in err:
+            raise HTTPException(status_code=500, detail="docker binary not found (install docker or set RUNTIME_DOCKER_BIN)")
+        if "cannot connect to the docker daemon" in err or "is the docker daemon running" in err:
+            raise HTTPException(status_code=500, detail="cannot connect to docker daemon (is docker running?)")
+        if "permission denied" in err:
+            raise HTTPException(status_code=500, detail="permission denied to access docker (check /var/run/docker.sock permissions)")
         return AppStatusResponse(appId=appId, containerName=name, exists=False, running=False)
     # naive: if inspect ok, assume exists; check running via ps
     ps = docker("ps", "--filter", f"name=^{name}$", "--format", "{{.Names}}", timeout_sec=10)
