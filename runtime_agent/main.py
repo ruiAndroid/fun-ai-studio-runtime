@@ -4,7 +4,10 @@ from runtime_agent.auth import require_runtime_token
 from runtime_agent.deploy_ops import deploy_container, stop_container
 from runtime_agent.deploy_registry import heartbeat
 from runtime_agent.docker_ops import container_name, docker
+from runtime_agent.logging_setup import setup_logging
 from runtime_agent.models import AppStatusResponse, DeployAppRequest, StopAppRequest
+
+setup_logging("fun-ai-studio-runtime")
 
 app = FastAPI(title="fun-ai-studio-runtime-agent")
 
