@@ -21,6 +21,16 @@ Runtime 节点：运行用户应用容器，并提供一个 **Runtime-Agent（HT
 - `RUNTIME_DOCKER_NETWORK=funai-runtime-net`（可选）
 - `RUNTIME_TRAEFIK_ENABLE=true`（默认 true）
 
+## 配置文件（推荐：EnvironmentFile）
+
+- 仓库内提供：`config/runtime.env`（你们当前选择在内网环境直接提交）
+- 部署时建议将其放到服务器：`/opt/fun-ai-studio/config/runtime.env`
+
+systemd 方式加载（示例）：
+
+- 在 `runtime-agent.service` 中加入：
+  - `EnvironmentFile=/opt/fun-ai-studio/config/runtime.env`
+
 ## 启动（示例）
 
 ```bash
