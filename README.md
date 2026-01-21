@@ -37,7 +37,7 @@ systemd 方式加载（示例）：
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn runtime_agent.main:app --host 0.0.0.0 --port 7005
+python -m runtime_agent.serve
 ```
 
 ## API
