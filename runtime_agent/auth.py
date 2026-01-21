@@ -1,9 +1,11 @@
+from typing import Optional
+
 from fastapi import Header, HTTPException
 
 from runtime_agent import settings
 
 
-def require_runtime_token(x_runtime_token: str | None = Header(default=None, alias="X-Runtime-Token")) -> None:
+def require_runtime_token(x_runtime_token: Optional[str] = Header(default=None, alias="X-Runtime-Token")) -> None:
     expected = settings.RUNTIME_AGENT_TOKEN
     if not expected or expected == "CHANGE_ME":
         raise HTTPException(status_code=500, detail="runtime agent token not configured")

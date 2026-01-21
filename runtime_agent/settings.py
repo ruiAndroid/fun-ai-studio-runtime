@@ -1,7 +1,8 @@
 import os
+from typing import Optional
 
 
-def env(name: str, default: str | None = None) -> str | None:
+def env(name: str, default: Optional[str] = None) -> Optional[str]:
     v = os.getenv(name)
     if v is None or v.strip() == "":
         return default
@@ -18,6 +19,7 @@ RUNTIME_NODE_GATEWAY_BASE_URL = env("RUNTIME_NODE_GATEWAY_BASE_URL")  # e.g. htt
 
 DEPLOY_BASE_URL = env("DEPLOY_BASE_URL")  # e.g. http://10.0.0.10:7002
 DEPLOY_NODE_TOKEN = env("DEPLOY_NODE_TOKEN")  # X-RT-Node-Token
+DEPLOY_HEARTBEAT_SECONDS = int(env("DEPLOY_HEARTBEAT_SECONDS", "60") or "60")
 
 RUNTIME_DOCKER_NETWORK = env("RUNTIME_DOCKER_NETWORK", "")
 RUNTIME_TRAEFIK_ENABLE = env("RUNTIME_TRAEFIK_ENABLE", "true").lower() != "false"

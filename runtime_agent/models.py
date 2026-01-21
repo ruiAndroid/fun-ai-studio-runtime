@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import Optional
 
 
 class DeployAppRequest(BaseModel):
@@ -17,6 +18,6 @@ class AppStatusResponse(BaseModel):
     containerName: str
     exists: bool
     running: bool
-    image: str | None = None
-    port: int | None = None
+    image: Optional[str] = None
+    port: Optional[int] = None
 
