@@ -47,4 +47,37 @@ python -m runtime_agent.serve
 - `POST /agent/apps/stop`
 - `GET /agent/apps/status?appId=...`
 
+## 网关（Traefik）快速启动（Podman 推荐）
+
+> 说明：runtime-agent 在部署容器时会打 Traefik labels，并把用户容器放入 `RUNTIME_DOCKER_NETWORK`。
+> 因此要让 `http://<runtime-node>/apps/{appId}/...` 可访问，需要在同一网络里运行一个 Traefik 网关容器，并监听宿主机 `80/443`。
+
+在 Runtime 节点（102）执行（以 `funai-runtime-net` 为例）：
+
+```bash
+# 1) 确保 podman socket 开启（Traefik 用它读取 labels）
+sudo systemctl enable --now podman.socket
+
+# 2) 确保网络存在（runtime-agent 也会 ensure，但这里提前做更直观）
+sudo podman network create funai-runtime-net 2>/dev/null || true
+
+# 3) 启动 Traefik（监听 80；需要 https 再加 443 及证书配置）
+sudo podman rm -f funai-traefik 2>/dev/null || true
+sudo podman run -d --name funai-traefik \
+  --restart=always \
+  --network funai-runtime-net \
+  -p 80:80 \
+  -v /run/podman/podman.sock:/var/run/docker.sock:Z \
+  docker.io/traefik:v2.11 \
+  --entrypoints.web.address=:80 \
+  --providers.docker=true \
+  --providers.docker.endpoint=unix:///var/run/docker.sock \
+  --providers.docker.exposedbydefault=false
+
+# 4) 验证 80 端口监听
+ss -lntp | grep ':80' || true
+```
+
+如果你所在环境无法直连 DockerHub（拉取 `docker.io/traefik` 超时），建议先把镜像同步到你们 ACR，再从 ACR pull（同你们同步 gitea 的方式）。
+
 

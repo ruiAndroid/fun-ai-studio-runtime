@@ -12,7 +12,7 @@ def ensure_network(network: str) -> None:
     docker("network", "create", network, timeout_sec=30)
 
 
-def deploy_container(app_id: str, image: str, container_port: int) -> str:
+def deploy_container(app_id: str, image: str, container_port: int, base_path: str = "") -> str:
     name = container_name(app_id)
 
     ensure_network(settings.RUNTIME_DOCKER_NETWORK)
@@ -29,7 +29,7 @@ def deploy_container(app_id: str, image: str, container_port: int) -> str:
         args += ["--network", settings.RUNTIME_DOCKER_NETWORK]
 
     if settings.RUNTIME_TRAEFIK_ENABLE:
-        for k, v in labels_for_app(app_id, container_port).items():
+        for k, v in labels_for_app(app_id, container_port, base_path=base_path).items():
             args += ["--label", f"{k}={v}"]
 
     # no host port publishing; traffic goes via gateway container network

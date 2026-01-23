@@ -6,6 +6,7 @@ from runtime_agent.deploy_registry import heartbeat, start_heartbeat_loop, stop_
 from runtime_agent.docker_ops import container_name, docker
 from runtime_agent.logging_setup import setup_logging
 from runtime_agent.models import AppStatusResponse, DeployAppRequest, StopAppRequest
+from runtime_agent import settings
 
 setup_logging("fun-ai-studio-runtime")
 
@@ -47,13 +48,22 @@ def on_shutdown():
 
 @app.post("/agent/apps/deploy", dependencies=[Depends(require_runtime_token)])
 def deploy(req: DeployAppRequest):
-    name = deploy_container(req.appId, req.image, req.containerPort)
+    name = deploy_container(req.appId, req.image, req.containerPort, base_path=req.basePath)
     # refresh heartbeat
     try:
         heartbeat()
     except Exception:
         pass
-    return {"appId": req.appId, "containerName": name, "status": "DEPLOYED"}
+    base = (settings.RUNTIME_NODE_GATEWAY_BASE_URL or "").rstrip("/")
+    preview = None
+    if base:
+        p = (req.basePath or "").strip()
+        if not p:
+            p = f"/apps/{req.appId}"
+        if not p.startswith("/"):
+            p = "/" + p
+        preview = base + p + "/"
+    return {"appId": req.appId, "containerName": name, "status": "DEPLOYED", "previewUrl": preview}
 
 
 @app.post("/agent/apps/stop", dependencies=[Depends(require_runtime_token)])
@@ -79,6 +89,19 @@ def status(appId: str):
     # naive: if inspect ok, assume exists; check running via ps
     ps = docker("ps", "--filter", f"name=^{name}$", "--format", "{{.Names}}", timeout_sec=10)
     running = ps.code == 0 and (name in (ps.out or ""))
-    return AppStatusResponse(appId=appId, containerName=name, exists=True, running=running)
+
+    img = docker("inspect", "-f", "{{.Config.Image}}", name, timeout_sec=10)
+    # 端口优先从 traefik label 读取；若没有则返回 None
+    label_key = f"traefik.http.services.rt-svc-{appId}.loadbalancer.server.port"
+    port = docker("inspect", "-f", f"{{{{(index .Config.Labels \"{label_key}\")}}}}", name, timeout_sec=10)
+    image_val = img.out.strip() if img.code == 0 else None
+    port_val = None
+    if port.code == 0:
+        p = port.out.strip()
+        try:
+            port_val = int(p) if p else None
+        except Exception:
+            port_val = None
+    return AppStatusResponse(appId=appId, containerName=name, exists=True, running=running, image=image_val, port=port_val)
 
 

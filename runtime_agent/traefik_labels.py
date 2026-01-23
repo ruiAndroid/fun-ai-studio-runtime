@@ -1,6 +1,17 @@
-def labels_for_app(app_id: str, container_port: int) -> dict[str, str]:
-    # PathPrefix(`/apps/{appId}`) + StripPrefix(`/apps/{appId}`)
-    prefix = f"/apps/{app_id}"
+from typing import Dict
+
+
+def labels_for_app(app_id: str, container_port: int, base_path: str = "") -> Dict[str, str]:
+    # PathPrefix(`<basePath>`) + StripPrefix(`<basePath>`)
+    # base_path 示例：/apps/{appId}
+    prefix = (base_path or "").strip()
+    if not prefix:
+        prefix = f"/apps/{app_id}"
+    if not prefix.startswith("/"):
+        prefix = "/" + prefix
+    # 避免 /apps/123/ 这种尾部斜杠造成匹配异常
+    if len(prefix) > 1 and prefix.endswith("/"):
+        prefix = prefix[:-1]
     router = f"rt-app-{app_id}"
     svc = f"rt-svc-{app_id}"
     mw = f"rt-mw-{app_id}"
