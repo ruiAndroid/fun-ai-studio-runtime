@@ -12,8 +12,8 @@ def ensure_network(network: str) -> None:
     docker("network", "create", network, timeout_sec=30)
 
 
-def deploy_container(app_id: str, image: str, container_port: int, base_path: str = "") -> str:
-    name = container_name(app_id)
+def deploy_container(user_id: str, app_id: str, image: str, container_port: int, base_path: str = "") -> str:
+    name = container_name(user_id, app_id)
 
     ensure_network(settings.RUNTIME_DOCKER_NETWORK)
 
@@ -41,7 +41,7 @@ def deploy_container(app_id: str, image: str, container_port: int, base_path: st
     return name
 
 
-def stop_container(app_id: str) -> None:
-    docker("rm", "-f", container_name(app_id), timeout_sec=30)
+def stop_container(user_id: str, app_id: str) -> None:
+    docker("rm", "-f", container_name(user_id, app_id), timeout_sec=30)
 
 

@@ -3,6 +3,7 @@ from typing import Optional
 
 
 class DeployAppRequest(BaseModel):
+    userId: str = Field(min_length=1)
     appId: str = Field(min_length=1)
     image: str = Field(min_length=1)
     containerPort: int = Field(default=3000, ge=1, le=65535)
@@ -10,6 +11,7 @@ class DeployAppRequest(BaseModel):
 
 
 class StopAppRequest(BaseModel):
+    userId: str = Field(min_length=1)
     appId: str = Field(min_length=1)
 
 

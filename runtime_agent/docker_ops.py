@@ -35,7 +35,7 @@ def docker(*args: str, timeout_sec: int = 120) -> CmdResult:
     return run([docker_bin, *args], timeout_sec=timeout_sec)
 
 
-def container_name(app_id: str) -> str:
-    return f"rt-app-{app_id}"
+def container_name(user_id: str, app_id: str) -> str:
+    return f"rt-u-{user_id}-{app_id}"
 
 

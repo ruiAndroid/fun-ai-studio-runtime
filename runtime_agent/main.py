@@ -48,7 +48,7 @@ def on_shutdown():
 
 @app.post("/agent/apps/deploy", dependencies=[Depends(require_runtime_token)])
 def deploy(req: DeployAppRequest):
-    name = deploy_container(req.appId, req.image, req.containerPort, base_path=req.basePath)
+    name = deploy_container(req.userId, req.appId, req.image, req.containerPort, base_path=req.basePath)
     # refresh heartbeat
     try:
         heartbeat()
@@ -68,16 +68,16 @@ def deploy(req: DeployAppRequest):
 
 @app.post("/agent/apps/stop", dependencies=[Depends(require_runtime_token)])
 def stop(req: StopAppRequest):
-    stop_container(req.appId)
+    stop_container(req.userId, req.appId)
     return {"appId": req.appId, "status": "STOPPED"}
 
 
 @app.get("/agent/apps/status", dependencies=[Depends(require_runtime_token)], response_model=AppStatusResponse)
-def status(appId: str):
-    name = container_name(appId)
+def status(userId: str, appId: str):
+    name = container_name(userId, appId)
     inspect = docker("inspect", name, timeout_sec=10)
     if inspect.code != 0:
-        # docker 不可用/daemon 不可达/权限问题：明确返回可读错误，避免“Internal Server Error”
+        # docker 不可用/daemon 不可达/权限问题：明确返回可读错误，避免"Internal Server Error"
         err = (inspect.err or inspect.out or "").lower()
         if inspect.code == 127 or "no such file" in err or "not found" in err:
             raise HTTPException(status_code=500, detail="docker binary not found (install docker or set RUNTIME_DOCKER_BIN)")
