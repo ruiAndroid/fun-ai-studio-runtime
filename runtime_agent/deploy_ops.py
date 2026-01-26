@@ -25,6 +25,20 @@ def deploy_container(user_id: str, app_id: str, image: str, container_port: int,
 
     args = ["run", "-d", "--restart=always", "--name", name]
 
+    # Optional per-app resource limits (docker/podman compatible flags).
+    if settings.RUNTIME_APP_CPUS:
+        args += ["--cpus", settings.RUNTIME_APP_CPUS]
+    if settings.RUNTIME_APP_CPU_SHARES:
+        args += ["--cpu-shares", settings.RUNTIME_APP_CPU_SHARES]
+    if settings.RUNTIME_APP_CPUSET_CPUS:
+        args += ["--cpuset-cpus", settings.RUNTIME_APP_CPUSET_CPUS]
+    if settings.RUNTIME_APP_MEMORY:
+        args += ["--memory", settings.RUNTIME_APP_MEMORY]
+    if settings.RUNTIME_APP_MEMORY_SWAP:
+        args += ["--memory-swap", settings.RUNTIME_APP_MEMORY_SWAP]
+    if settings.RUNTIME_APP_PIDS_LIMIT:
+        args += ["--pids-limit", settings.RUNTIME_APP_PIDS_LIMIT]
+
     if settings.RUNTIME_DOCKER_NETWORK:
         args += ["--network", settings.RUNTIME_DOCKER_NETWORK]
 

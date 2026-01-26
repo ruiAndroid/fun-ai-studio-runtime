@@ -25,4 +25,15 @@ RUNTIME_DOCKER_NETWORK = env("RUNTIME_DOCKER_NETWORK", "")
 RUNTIME_TRAEFIK_ENABLE = env("RUNTIME_TRAEFIK_ENABLE", "true").lower() != "false"
 RUNTIME_CONTAINER_PORT = int(env("RUNTIME_CONTAINER_PORT", "3000"))
 
+# -----------------------------
+# User app container resource limits (optional)
+# -----------------------------
+# If empty -> do not pass the flag to docker/podman.
+RUNTIME_APP_CPUS = env("RUNTIME_APP_CPUS", "")  # e.g. "1", "1.5", "2"
+RUNTIME_APP_CPU_SHARES = env("RUNTIME_APP_CPU_SHARES", "")  # e.g. "512" (default 1024)
+RUNTIME_APP_CPUSET_CPUS = env("RUNTIME_APP_CPUSET_CPUS", "")  # e.g. "0-3"
+RUNTIME_APP_MEMORY = env("RUNTIME_APP_MEMORY", "")  # e.g. "512m", "1g", "2g"
+RUNTIME_APP_MEMORY_SWAP = env("RUNTIME_APP_MEMORY_SWAP", "")  # e.g. "1g" (or "0" to disable swap)
+RUNTIME_APP_PIDS_LIMIT = env("RUNTIME_APP_PIDS_LIMIT", "")  # e.g. "256"
+
 
