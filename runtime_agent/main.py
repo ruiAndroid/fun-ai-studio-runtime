@@ -1,11 +1,11 @@
 from fastapi import Depends, FastAPI, HTTPException
 
 from runtime_agent.auth import require_runtime_token
-from runtime_agent.deploy_ops import deploy_container, stop_container
+from runtime_agent.deploy_ops import deploy_container, stop_container, remove_app_images
 from runtime_agent.deploy_registry import heartbeat, start_heartbeat_loop, stop_heartbeat_loop
 from runtime_agent.docker_ops import container_name, docker
 from runtime_agent.logging_setup import setup_logging
-from runtime_agent.models import AppStatusResponse, DeployAppRequest, StopAppRequest
+from runtime_agent.models import AppStatusResponse, DeployAppRequest, StopAppRequest, DeleteAppRequest
 from runtime_agent import settings
 
 setup_logging("fun-ai-studio-runtime")
@@ -70,6 +70,14 @@ def deploy(req: DeployAppRequest):
 def stop(req: StopAppRequest):
     stop_container(req.userId, req.appId)
     return {"appId": req.appId, "status": "STOPPED"}
+
+
+@app.post("/agent/apps/delete", dependencies=[Depends(require_runtime_token)])
+def delete(req: DeleteAppRequest):
+    # remove container first (idempotent)
+    stop_container(req.userId, req.appId)
+    img = remove_app_images(req.userId, req.appId)
+    return {"appId": req.appId, "status": "DELETED", "images": img}
 
 
 @app.get("/agent/apps/status", dependencies=[Depends(require_runtime_token)], response_model=AppStatusResponse)

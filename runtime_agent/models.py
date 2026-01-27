@@ -15,6 +15,11 @@ class StopAppRequest(BaseModel):
     appId: str = Field(min_length=1)
 
 
+class DeleteAppRequest(BaseModel):
+    userId: str = Field(min_length=1)
+    appId: str = Field(min_length=1)
+
+
 class AppStatusResponse(BaseModel):
     appId: str
     containerName: str
