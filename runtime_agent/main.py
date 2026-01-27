@@ -69,6 +69,11 @@ def deploy(req: DeployAppRequest):
 @app.post("/agent/apps/stop", dependencies=[Depends(require_runtime_token)])
 def stop(req: StopAppRequest):
     stop_container(req.userId, req.appId)
+    if settings.RUNTIME_CLEANUP_IMAGES_ON_STOP:
+        try:
+            remove_app_images(req.userId, req.appId)
+        except Exception:
+            pass
     return {"appId": req.appId, "status": "STOPPED"}
 
 

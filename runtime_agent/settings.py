@@ -36,4 +36,10 @@ RUNTIME_APP_MEMORY = env("RUNTIME_APP_MEMORY", "")  # e.g. "512m", "1g", "2g"
 RUNTIME_APP_MEMORY_SWAP = env("RUNTIME_APP_MEMORY_SWAP", "")  # e.g. "1g" (or "0" to disable swap)
 RUNTIME_APP_PIDS_LIMIT = env("RUNTIME_APP_PIDS_LIMIT", "")  # e.g. "256"
 
+# -----------------------------
+# Cleanup behavior
+# -----------------------------
+# If true, stop (offline) will also remove local images for this app (saves disk, slower redeploy).
+RUNTIME_CLEANUP_IMAGES_ON_STOP = env("RUNTIME_CLEANUP_IMAGES_ON_STOP", "false").lower() == "true"
+
 
