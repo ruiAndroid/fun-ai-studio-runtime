@@ -2,6 +2,15 @@ from runtime_agent import settings
 from runtime_agent.docker_ops import docker, container_name
 from runtime_agent.traefik_labels import labels_for_app
 
+import re
+from datetime import datetime, timezone
+
+try:
+    # Optional dependency, used for best-effort DB pre-create.
+    from pymongo import MongoClient  # type: ignore
+except Exception:  # pragma: no cover
+    MongoClient = None  # type: ignore
+
 
 def ensure_network(network: str) -> None:
     if not network:
@@ -10,6 +19,74 @@ def ensure_network(network: str) -> None:
     if r.code == 0:
         return
     docker("network", "create", network, timeout_sec=30)
+
+
+_MONGO_DB_SAFE_RE = re.compile(r"[^a-zA-Z0-9_]+")
+
+
+def _mongo_db_name(user_id: str, app_id: str) -> str:
+    """
+    Generate a safe MongoDB database name.
+    - Uses template RUNTIME_MONGO_DB_TEMPLATE with placeholders {userId}/{appId}.
+    - Replaces invalid characters with '_'.
+    """
+    raw = (settings.RUNTIME_MONGO_DB_TEMPLATE or "db_u{userId}_a{appId}").format(userId=user_id, appId=app_id)
+    name = _MONGO_DB_SAFE_RE.sub("_", (raw or "").strip())
+    # avoid empty / leading underscore-only
+    if not name or set(name) == {"_"}:
+        name = f"db_u{user_id}_a{app_id}"
+        name = _MONGO_DB_SAFE_RE.sub("_", name)
+    # MongoDB has a 63-byte namespace limit for some constructs; DB name practical limit is small.
+    # Keep it conservative.
+    return name[:63]
+
+
+def _mongodb_uri(db_name: str) -> str:
+    host = (settings.RUNTIME_MONGO_HOST or "").strip()
+    port = int(settings.RUNTIME_MONGO_PORT or 27017)
+    if not host:
+        return ""
+    user = (settings.RUNTIME_MONGO_USERNAME or "").strip()
+    pwd = (settings.RUNTIME_MONGO_PASSWORD or "").strip()
+    auth_source = (settings.RUNTIME_MONGO_AUTH_SOURCE or "admin").strip()
+    if user and pwd:
+        return f"mongodb://{user}:{pwd}@{host}:{port}/{db_name}?authSource={auth_source}"
+    return f"mongodb://{host}:{port}/{db_name}"
+
+
+def _mongo_precreate_best_effort(uri: str, db_name: str, user_id: str, app_id: str) -> None:
+    """
+    Best-effort create DB/collection by doing a single upsert.
+    This should never break deployment flow.
+    """
+    if not settings.RUNTIME_MONGO_PRECREATE:
+        return
+    if not uri:
+        return
+    if MongoClient is None:
+        return
+    try:
+        client = MongoClient(uri, serverSelectionTimeoutMS=int(settings.RUNTIME_MONGO_PRECREATE_TIMEOUT_SECONDS * 1000))
+        db = client.get_database(db_name)
+        db.get_collection("__funai_meta__").update_one(
+            {"_id": "init"},
+            {
+                "$setOnInsert": {
+                    "createdAt": datetime.now(timezone.utc).isoformat(),
+                    "userId": str(user_id),
+                    "appId": str(app_id),
+                }
+            },
+            upsert=True,
+        )
+    except Exception:
+        # swallow: DB might be temporarily unreachable; app may still start and retry later.
+        pass
+    finally:
+        try:
+            client.close()  # type: ignore
+        except Exception:
+            pass
 
 
 def deploy_container(user_id: str, app_id: str, image: str, container_port: int, base_path: str = "") -> str:
@@ -45,6 +122,17 @@ def deploy_container(user_id: str, app_id: str, image: str, container_port: int,
     if settings.RUNTIME_TRAEFIK_ENABLE:
         for k, v in labels_for_app(app_id, container_port, base_path=base_path).items():
             args += ["--label", f"{k}={v}"]
+
+    # Inject runtime Mongo connection for user apps (recommended).
+    # Apps should read process.env.MONGODB_URI (or MONGO_URL).
+    if (settings.RUNTIME_MONGO_HOST or "").strip():
+        db_name = _mongo_db_name(user_id, app_id)
+        uri = _mongodb_uri(db_name)
+        if uri:
+            args += ["-e", f"MONGODB_URI={uri}", "-e", f"MONGO_URL={uri}"]
+            args += ["-e", f"FUNAI_MONGO_DB_NAME={db_name}"]
+            # best-effort precreate (so DB appears immediately even if app doesn't write yet)
+            _mongo_precreate_best_effort(uri=uri, db_name=db_name, user_id=user_id, app_id=app_id)
 
     # no host port publishing; traffic goes via gateway container network
     args += [image]

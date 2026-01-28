@@ -26,6 +26,25 @@ RUNTIME_TRAEFIK_ENABLE = env("RUNTIME_TRAEFIK_ENABLE", "true").lower() != "false
 RUNTIME_CONTAINER_PORT = int(env("RUNTIME_CONTAINER_PORT", "3000"))
 
 # -----------------------------
+# Runtime Mongo (optional but recommended for deployed apps)
+# -----------------------------
+# If RUNTIME_MONGO_HOST is empty -> do not inject MONGODB_URI into user app containers.
+RUNTIME_MONGO_HOST = env("RUNTIME_MONGO_HOST", "")  # e.g. 172.21.138.89
+RUNTIME_MONGO_PORT = int(env("RUNTIME_MONGO_PORT", "27017") or "27017")
+RUNTIME_MONGO_USERNAME = env("RUNTIME_MONGO_USERNAME", "")
+RUNTIME_MONGO_PASSWORD = env("RUNTIME_MONGO_PASSWORD", "")
+RUNTIME_MONGO_AUTH_SOURCE = env("RUNTIME_MONGO_AUTH_SOURCE", "admin")
+
+# Database naming template. Available placeholders: {userId}, {appId}
+# Recommended (user-app dimension): db_u{userId}_a{appId}
+RUNTIME_MONGO_DB_TEMPLATE = env("RUNTIME_MONGO_DB_TEMPLATE", "db_u{userId}_a{appId}") or "db_u{userId}_a{appId}"
+
+# If true, runtime-agent will best-effort pre-create the database by writing a sentinel document.
+# Note: MongoDB "creates" DB/collections on first write, so this is only to make it explicit/visible.
+RUNTIME_MONGO_PRECREATE = env("RUNTIME_MONGO_PRECREATE", "true").lower() == "true"
+RUNTIME_MONGO_PRECREATE_TIMEOUT_SECONDS = int(env("RUNTIME_MONGO_PRECREATE_TIMEOUT_SECONDS", "3") or "3")
+
+# -----------------------------
 # User app container resource limits (optional)
 # -----------------------------
 # If empty -> do not pass the flag to docker/podman.
