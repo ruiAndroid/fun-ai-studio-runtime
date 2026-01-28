@@ -1,7 +1,7 @@
 from fastapi import Depends, FastAPI, HTTPException
 
 from runtime_agent.auth import require_runtime_token
-from runtime_agent.deploy_ops import deploy_container, stop_container, remove_app_images
+from runtime_agent.deploy_ops import deploy_container, stop_container, remove_app_images, drop_app_db_best_effort
 from runtime_agent.deploy_registry import heartbeat, start_heartbeat_loop, stop_heartbeat_loop
 from runtime_agent.docker_ops import container_name, docker
 from runtime_agent.logging_setup import setup_logging
@@ -82,7 +82,8 @@ def delete(req: DeleteAppRequest):
     # remove container first (idempotent)
     stop_container(req.userId, req.appId)
     img = remove_app_images(req.userId, req.appId)
-    return {"appId": req.appId, "status": "DELETED", "images": img}
+    db = drop_app_db_best_effort(req.userId, req.appId)
+    return {"appId": req.appId, "status": "DELETED", "images": img, "mongo": db}
 
 
 @app.get("/agent/apps/status", dependencies=[Depends(require_runtime_token)], response_model=AppStatusResponse)

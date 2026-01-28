@@ -44,6 +44,12 @@ RUNTIME_MONGO_DB_TEMPLATE = env("RUNTIME_MONGO_DB_TEMPLATE", "db_u{userId}_a{app
 RUNTIME_MONGO_PRECREATE = env("RUNTIME_MONGO_PRECREATE", "true").lower() == "true"
 RUNTIME_MONGO_PRECREATE_TIMEOUT_SECONDS = int(env("RUNTIME_MONGO_PRECREATE_TIMEOUT_SECONDS", "3") or "3")
 
+# If true, runtime-agent will drop the corresponding DB when an app is deleted (/agent/apps/delete).
+# Recommended policy:
+# - stop/offline: keep DB
+# - delete: drop DB (if this is your current product policy)
+RUNTIME_MONGO_DROP_ON_DELETE = env("RUNTIME_MONGO_DROP_ON_DELETE", "false").lower() == "true"
+
 # -----------------------------
 # User app container resource limits (optional)
 # -----------------------------

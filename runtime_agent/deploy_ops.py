@@ -89,6 +89,34 @@ def _mongo_precreate_best_effort(uri: str, db_name: str, user_id: str, app_id: s
             pass
 
 
+def drop_app_db_best_effort(user_id: str, app_id: str) -> dict:
+    """
+    Best-effort drop the app database when app is deleted.
+    This must never break the delete flow.
+    """
+    if not settings.RUNTIME_MONGO_DROP_ON_DELETE:
+        return {"enabled": False, "dropped": False}
+    if not (settings.RUNTIME_MONGO_HOST or "").strip():
+        return {"enabled": True, "dropped": False, "reason": "RUNTIME_MONGO_HOST not configured"}
+    if MongoClient is None:
+        return {"enabled": True, "dropped": False, "reason": "pymongo not installed"}
+    try:
+        db_name = _mongo_db_name(user_id, app_id)
+        uri = _mongodb_uri(db_name)
+        if not uri:
+            return {"enabled": True, "dropped": False, "reason": "mongodb uri empty"}
+        client = MongoClient(uri, serverSelectionTimeoutMS=int(settings.RUNTIME_MONGO_PRECREATE_TIMEOUT_SECONDS * 1000))
+        client.drop_database(db_name)
+        return {"enabled": True, "dropped": True, "dbName": db_name}
+    except Exception as e:
+        return {"enabled": True, "dropped": False, "error": str(e)}
+    finally:
+        try:
+            client.close()  # type: ignore
+        except Exception:
+            pass
+
+
 def deploy_container(user_id: str, app_id: str, image: str, container_port: int, base_path: str = "") -> str:
     name = container_name(user_id, app_id)
 
