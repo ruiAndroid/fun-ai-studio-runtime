@@ -21,6 +21,36 @@ def ensure_network(network: str) -> None:
     docker("network", "create", network, timeout_sec=30)
 
 
+def ensure_registry_login() -> None:
+    """
+    Auto-login to registry (Harbor) if credentials are configured.
+    This ensures runtime can pull images from private registry.
+    """
+    if not settings.REGISTRY_URL:
+        return
+    if not settings.REGISTRY_USERNAME or not settings.REGISTRY_PASSWORD:
+        return
+    
+    # Check if already logged in by trying to pull a test (will fail gracefully if not logged in)
+    # For simplicity, we just login every time (docker/podman will cache credentials)
+    try:
+        # Use stdin for password to avoid exposing it in process list
+        r = docker(
+            "login",
+            settings.REGISTRY_URL,
+            "-u",
+            settings.REGISTRY_USERNAME,
+            "--password-stdin",
+            stdin=settings.REGISTRY_PASSWORD,
+            timeout_sec=30
+        )
+        if r.code != 0:
+            # Log warning but don't fail - maybe credentials are already cached
+            print(f"Warning: Registry login failed: {r.err or r.out}")
+    except Exception as e:
+        print(f"Warning: Registry login error: {e}")
+
+
 _MONGO_DB_SAFE_RE = re.compile(r"[^a-zA-Z0-9_]+")
 
 
@@ -121,6 +151,9 @@ def deploy_container(user_id: str, app_id: str, image: str, container_port: int,
     name = container_name(user_id, app_id)
 
     ensure_network(settings.RUNTIME_DOCKER_NETWORK)
+    
+    # Auto-login to registry if configured
+    ensure_registry_login()
 
     # pull image (optional but helpful)
     docker("pull", image, timeout_sec=300)

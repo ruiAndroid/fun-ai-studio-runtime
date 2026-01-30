@@ -67,4 +67,12 @@ RUNTIME_APP_PIDS_LIMIT = env("RUNTIME_APP_PIDS_LIMIT", "")  # e.g. "256"
 # If true, stop (offline) will also remove local images for this app (saves disk, slower redeploy).
 RUNTIME_CLEANUP_IMAGES_ON_STOP = env("RUNTIME_CLEANUP_IMAGES_ON_STOP", "false").lower() == "true"
 
+# -----------------------------
+# Registry (Harbor) authentication
+# -----------------------------
+# If REGISTRY_URL is set, runtime-agent will auto-login before pulling images.
+REGISTRY_URL = env("REGISTRY_URL", "")  # e.g. 172.21.138.103
+REGISTRY_USERNAME = env("REGISTRY_USERNAME", "")  # e.g. robot$robot-runner
+REGISTRY_PASSWORD = env("REGISTRY_PASSWORD", "")  # Harbor robot token
+
 
