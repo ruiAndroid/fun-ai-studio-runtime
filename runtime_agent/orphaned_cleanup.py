@@ -1,78 +1,65 @@
 """
-部署态孤立数据清理（定时任务）
+部署态孤立数据清理 API
 
-清理内容：
+提供 HTTP 接口供主项目（91）调用，清理部署态的孤立数据：
 1. 89 MongoDB 服务器上的孤立数据库（db_u{userId}_a{appId}）
-
-执行时间：每天凌晨 3:00（通过 cron 或 systemd timer 调度）
-
-使用方法：
-1. 通过 cron 调度：
-   0 3 * * * cd /opt/fun-ai-studio/fun-ai-studio-runtime && /usr/bin/python3 -m runtime_agent.orphaned_data_cleaner
-
-2. 通过 systemd timer 调度：
-   创建 /etc/systemd/system/funai-runtime-cleanup.service 和 .timer
-
-3. 手动执行：
-   cd /opt/fun-ai-studio/fun-ai-studio-runtime
-   python3 -m runtime_agent.orphaned_data_cleaner
 """
 
 import re
-import sys
 import logging
 from typing import Set
-import requests
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 try:
     from pymongo import MongoClient
 except ImportError:
-    print("Error: pymongo not installed. Please install: pip install pymongo")
-    sys.exit(1)
+    MongoClient = None
 
 from runtime_agent import settings
+from runtime_agent.auth import require_runtime_token
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 log = logging.getLogger(__name__)
 
+router = APIRouter(prefix="/agent", tags=["cleanup"])
 
-def load_existing_app_ids() -> Set[str]:
+
+class CleanupRequest(BaseModel):
+    """清理请求"""
+    existingAppIds: list[int]
+
+
+class CleanupResponse(BaseModel):
+    """清理响应"""
+    cleanedDatabases: int
+    message: str
+
+
+@router.post("/cleanup-orphaned", dependencies=[Depends(require_runtime_token)])
+def cleanup_orphaned_data(req: CleanupRequest) -> CleanupResponse:
     """
-    从 deploy 服务（100 服务器）加载所有存在的应用 ID
+    清理孤立数据（部署态）
     
-    注意：需要配置 DEPLOY_BASE_URL 环境变量
+    由主项目（91）调用，传入数据库中存在的应用 ID 列表，
+    清理 89 MongoDB 服务器上不在列表中的数据库。
     """
-    if not settings.DEPLOY_BASE_URL:
-        log.error("DEPLOY_BASE_URL 未配置，无法加载应用列表")
-        return set()
-    
     try:
-        # 调用 deploy 服务的 API 获取所有应用 ID
-        # 注意：这个 API 需要在 deploy 服务中实现
-        url = f"{settings.DEPLOY_BASE_URL.rstrip('/')}/api/fun-ai/internal/apps/ids"
+        existing_app_ids = set(str(app_id) for app_id in req.existingAppIds)
+        log.info(f"开始清理部署态孤立数据，应用数量: {len(existing_app_ids)}")
         
-        # 使用 runtime-agent token 进行认证
-        headers = {}
-        if settings.RUNTIME_AGENT_TOKEN:
-            headers["X-Runtime-Token"] = settings.RUNTIME_AGENT_TOKEN
+        cleaned = clean_orphaned_mongo_databases(existing_app_ids)
         
-        response = requests.get(url, headers=headers, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            app_ids = set(str(app_id) for app_id in data.get("appIds", []))
-            log.info(f"从 deploy 服务加载了 {len(app_ids)} 个应用 ID")
-            return app_ids
-        else:
-            log.error(f"加载应用列表失败: HTTP {response.status_code}")
-            return set()
+        log.info(f"部署态孤立数据清理完成，清理了 {cleaned} 个数据库")
+        return CleanupResponse(
+            cleanedDatabases=cleaned,
+            message="success"
+        )
     except Exception as e:
-        log.error(f"加载应用列表失败: {e}")
-        return set()
+        log.error(f"部署态孤立数据清理失败: {e}", exc_info=True)
+        return CleanupResponse(
+            cleanedDatabases=0,
+            message=f"error: {str(e)}"
+        )
 
 
 def list_mongo_databases() -> list[str]:
@@ -81,6 +68,10 @@ def list_mongo_databases() -> list[str]:
     """
     if not settings.RUNTIME_MONGO_HOST:
         log.error("RUNTIME_MONGO_HOST 未配置")
+        return []
+    
+    if MongoClient is None:
+        log.error("pymongo 未安装")
         return []
     
     try:
@@ -116,6 +107,10 @@ def drop_database(db_name: str) -> bool:
     """
     if not settings.RUNTIME_MONGO_HOST:
         log.error("RUNTIME_MONGO_HOST 未配置")
+        return False
+    
+    if MongoClient is None:
+        log.error("pymongo 未安装")
         return False
     
     try:
@@ -174,32 +169,3 @@ def clean_orphaned_mongo_databases(existing_app_ids: Set[str]) -> int:
     
     log.info(f"清理 MongoDB 数据库完成: 已清理={cleaned}")
     return cleaned
-
-
-def main():
-    """
-    主函数：执行孤立数据清理
-    """
-    log.info("=== 开始清理部署态孤立数据 ===")
-    
-    try:
-        # 1. 加载所有存在的应用 ID
-        existing_app_ids = load_existing_app_ids()
-        
-        if not existing_app_ids:
-            log.warning("未能加载应用列表，跳过清理")
-            return
-        
-        log.info(f"数据库中存在的应用数量: {len(existing_app_ids)}")
-        
-        # 2. 清理孤立的 MongoDB 数据库
-        cleaned = clean_orphaned_mongo_databases(existing_app_ids)
-        
-        log.info(f"=== 部署态孤立数据清理完成，清理了 {cleaned} 个数据库 ===")
-    except Exception as e:
-        log.error(f"孤立数据清理失败: {e}", exc_info=True)
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
