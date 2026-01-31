@@ -7,10 +7,14 @@ from runtime_agent.docker_ops import container_name, docker
 from runtime_agent.logging_setup import setup_logging
 from runtime_agent.models import AppStatusResponse, DeployAppRequest, StopAppRequest, DeleteAppRequest
 from runtime_agent import settings
+from runtime_agent import mongo_explorer
 
 setup_logging("fun-ai-studio-runtime")
 
 app = FastAPI(title="fun-ai-studio-runtime-agent")
+
+# Register Mongo Explorer routes
+app.include_router(mongo_explorer.router)
 
 
 @app.get("/internal")
