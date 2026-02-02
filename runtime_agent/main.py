@@ -67,7 +67,7 @@ def deploy(req: DeployAppRequest):
     if base:
         p = (req.basePath or "").strip()
         if not p:
-            p = f"/apps/{req.appId}"
+            p = f"/runtime/{req.appId}"
         if not p.startswith("/"):
             p = "/" + p
         preview = base + p + "/"

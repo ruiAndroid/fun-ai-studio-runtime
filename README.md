@@ -6,7 +6,7 @@ Runtime 节点：运行用户应用容器，并提供一个 **Runtime-Agent（HT
 
 - Runtime-Agent：FastAPI（默认 `7005`）
 - Docker：运行用户应用容器
-- 网关：建议 Traefik（对外 80/443），按路径 `/apps/{appId}` 路由到容器
+- 网关：建议 Traefik（对外 80/443），按路径 `/runtime/{appId}` 路由到容器
 
 ## 配置（环境变量）
 
@@ -50,7 +50,7 @@ python -m runtime_agent.serve
 ## 网关（Traefik）快速启动（Podman 推荐）
 
 > 说明：runtime-agent 在部署容器时会打 Traefik labels，并把用户容器放入 `RUNTIME_DOCKER_NETWORK`。
-> 因此要让 `http://<runtime-node>/apps/{appId}/...` 可访问，需要在同一网络里运行一个 Traefik 网关容器，并监听宿主机 `80/443`。
+> 因此要让 `http://<runtime-node>/runtime/{appId}/...` 可访问，需要在同一网络里运行一个 Traefik 网关容器，并监听宿主机 `80/443`。
 
 在 Runtime 节点（102）执行（以 `funai-runtime-net` 为例）：
 
