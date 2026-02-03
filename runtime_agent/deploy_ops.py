@@ -3,6 +3,7 @@ from runtime_agent.docker_ops import docker, container_name
 from runtime_agent.traefik_labels import labels_for_app
 
 import re
+import time
 from datetime import datetime, timezone
 
 try:
@@ -201,7 +202,64 @@ def deploy_container(user_id: str, app_id: str, image: str, container_port: int,
     r = docker(*args, timeout_sec=120)
     if r.code != 0:
         raise RuntimeError(f"docker run failed: {r.err or r.out}")
+
+    # Post-check: ensure container did not immediately crash-loop (common: missing build artifacts / bad CMD).
+    # Without this, deployment might be reported "success" while container exits instantly, leading to /runtime/{appId} 502.
+    _assert_container_running_best_effort(name, wait_seconds=3)
     return name
+
+
+def _inspect_field(name: str, go_template: str) -> str:
+    """
+    Inspect a single field via Go template. Works for docker/podman.
+    Returns trimmed stdout on success, else empty string.
+    """
+    r = docker("inspect", "-f", go_template, name, timeout_sec=10)
+    if r.code != 0:
+        return ""
+    return (r.out or "").strip()
+
+
+def _assert_container_running_best_effort(name: str, wait_seconds: int = 3) -> None:
+    """
+    Wait briefly for container to stay in running state.
+
+    If it exits quickly, raise RuntimeError with exitCode and tail logs to surface real cause
+    (e.g., MODULE_NOT_FOUND, config missing, port binding error).
+    """
+    deadline = time.time() + max(0, int(wait_seconds))
+    last_running = ""
+    while True:
+        running = _inspect_field(name, "{{.State.Running}}").lower()
+        last_running = running
+        if running == "true":
+            return
+
+        # If already exited, we can fail fast without waiting full timeout.
+        exit_code = _inspect_field(name, "{{.State.ExitCode}}")
+        status = _inspect_field(name, "{{.State.Status}}") or "unknown"
+        err = _inspect_field(name, "{{.State.Error}}")
+        finished = _inspect_field(name, "{{.State.FinishedAt}}")
+        if exit_code and exit_code != "0" and status in ("exited", "dead"):
+            logs = docker("logs", "--tail", "120", name, timeout_sec=10)
+            tail = (logs.out or logs.err or "").strip()
+            raise RuntimeError(
+                "container exited right after start: "
+                f"name={name}, status={status}, exitCode={exit_code}, finishedAt={finished}, error={err}, "
+                f"logsTail={tail[-2000:]}"
+            )
+
+        if time.time() >= deadline:
+            # timeout: still not running; include minimal diag
+            logs = docker("logs", "--tail", "80", name, timeout_sec=10)
+            tail = (logs.out or logs.err or "").strip()
+            raise RuntimeError(
+                "container not running after deploy: "
+                f"name={name}, running={last_running}, status={status}, exitCode={exit_code}, error={err}, "
+                f"logsTail={tail[-2000:]}"
+            )
+
+        time.sleep(0.3)
 
 
 def stop_container(user_id: str, app_id: str) -> None:
