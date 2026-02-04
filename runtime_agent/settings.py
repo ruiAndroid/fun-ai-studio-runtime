@@ -21,6 +21,11 @@ DEPLOY_BASE_URL = env("DEPLOY_BASE_URL")  # e.g. http://10.0.0.10:7002
 DEPLOY_NODE_TOKEN = env("DEPLOY_NODE_TOKEN")  # X-RT-Node-Token
 DEPLOY_HEARTBEAT_SECONDS = int(env("DEPLOY_HEARTBEAT_SECONDS", "60") or "60")
 
+# If the same app (userId+appId) is deployed repeatedly while a deployment is still in progress,
+# runtime-agent will reject the new request with HTTP 409 to avoid duplicate deployment tasks.
+# NOTE: This is an in-memory lock per runtime-agent process (works best with a single worker).
+DEPLOY_INFLIGHT_REJECT = env("DEPLOY_INFLIGHT_REJECT", "true").lower() != "false"
+
 RUNTIME_DOCKER_NETWORK = env("RUNTIME_DOCKER_NETWORK", "")
 RUNTIME_TRAEFIK_ENABLE = env("RUNTIME_TRAEFIK_ENABLE", "true").lower() != "false"
 RUNTIME_CONTAINER_PORT = int(env("RUNTIME_CONTAINER_PORT", "3000"))

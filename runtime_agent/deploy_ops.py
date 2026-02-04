@@ -1,5 +1,5 @@
 from runtime_agent import settings
-from runtime_agent.docker_ops import docker, container_name
+from runtime_agent.docker_ops import docker, container_name, is_podman, docker_bin_name
 from runtime_agent.traefik_labels import labels_for_app
 
 import re
@@ -159,10 +159,29 @@ def deploy_container(user_id: str, app_id: str, image: str, container_port: int,
     # pull image (optional but helpful)
     docker("pull", image, timeout_sec=300)
 
-    # remove existing
-    docker("rm", "-f", name, timeout_sec=30)
+    # remove existing (idempotent deploy)
+    # - For Podman: prefer --replace to avoid "name already in use" races and storage edge-cases.
+    # - For Docker: best-effort rm -f; if still exists, fail fast with a clearer error.
+    rm = docker("rm", "-f", name, timeout_sec=30)
+    if rm.code != 0:
+        # "no such container" is fine; any other error should be surfaced because it will cause name conflicts.
+        msg = (rm.err or rm.out or "").strip().lower()
+        if "no such" not in msg and "not found" not in msg:
+            # keep going for podman --replace path; for docker we will hard-fail later if still exists
+            pass
 
     args = ["run", "-d", "--restart=always", "--name", name]
+    if is_podman():
+        # Podman supports --replace to atomically replace existing container with same name.
+        args.insert(1, "--replace")
+    else:
+        # docker: ensure name is actually free (otherwise we will get a confusing error at run time)
+        chk = docker("inspect", name, timeout_sec=10)
+        if chk.code == 0:
+            raise RuntimeError(
+                "deploy refused: existing container still present after rm -f. "
+                f"engine={docker_bin_name()}, name={name}, rmErr={(rm.err or rm.out)}"
+            )
 
     # Optional per-app resource limits (docker/podman compatible flags).
     if settings.RUNTIME_APP_CPUS:

@@ -1,3 +1,6 @@
+import threading
+import time
+
 from fastapi import Depends, FastAPI, HTTPException
 
 from runtime_agent.auth import require_runtime_token
@@ -13,6 +16,41 @@ from runtime_agent import orphaned_cleanup
 setup_logging("fun-ai-studio-runtime")
 
 app = FastAPI(title="fun-ai-studio-runtime-agent")
+
+# ------------------------------------------------------------
+# In-flight deploy guard (per-process, per-app: userId+appId)
+# ------------------------------------------------------------
+_deploy_guard_lock = threading.Lock()
+_deploy_inflight: dict[str, float] = {}
+
+
+def _deploy_key(user_id: str, app_id: str) -> str:
+    return f"{user_id}:{app_id}"
+
+
+def _try_acquire_deploy(key: str) -> float | None:
+    """
+    Returns start timestamp if acquired; otherwise None.
+    """
+    if not settings.DEPLOY_INFLIGHT_REJECT:
+        return time.time()
+    with _deploy_guard_lock:
+        if key in _deploy_inflight:
+            return None
+        ts = time.time()
+        _deploy_inflight[key] = ts
+        return ts
+
+
+def _release_deploy(key: str, ts: float | None) -> None:
+    if not settings.DEPLOY_INFLIGHT_REJECT:
+        return
+    if ts is None:
+        return
+    with _deploy_guard_lock:
+        # only release if it is the same deployment instance
+        if _deploy_inflight.get(key) == ts:
+            _deploy_inflight.pop(key, None)
 
 # Register Mongo Explorer routes
 app.include_router(mongo_explorer.router)
@@ -56,7 +94,17 @@ def on_shutdown():
 
 @app.post("/agent/apps/deploy", dependencies=[Depends(require_runtime_token)])
 def deploy(req: DeployAppRequest):
-    name = deploy_container(req.userId, req.appId, req.image, req.containerPort, base_path=req.basePath)
+    key = _deploy_key(req.userId, req.appId)
+    ts = _try_acquire_deploy(key)
+    if ts is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"该应用正在部署中，请稍后重试（userId={req.userId}, appId={req.appId}）",
+        )
+    try:
+        name = deploy_container(req.userId, req.appId, req.image, req.containerPort, base_path=req.basePath)
+    finally:
+        _release_deploy(key, ts)
     # refresh heartbeat
     try:
         heartbeat()
