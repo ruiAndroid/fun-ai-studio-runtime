@@ -36,6 +36,18 @@ def docker(*args: str, timeout_sec: int = 120, stdin: Optional[str] = None) -> C
     return run([docker_bin, *args], timeout_sec=timeout_sec, stdin=stdin)
 
 
+def docker_bin_name() -> str:
+    """
+    Return the runtime container engine binary name (docker/podman).
+    """
+    return (os.getenv("RUNTIME_DOCKER_BIN", "docker") or "docker").strip()
+
+
+def is_podman() -> bool:
+    b = docker_bin_name().lower()
+    return "podman" in b
+
+
 def container_name(user_id: str, app_id: str) -> str:
     return f"rt-u-{user_id}-{app_id}"
 
