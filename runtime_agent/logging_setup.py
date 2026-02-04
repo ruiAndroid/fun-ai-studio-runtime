@@ -153,7 +153,7 @@ def setup_logging(service_name: str = "fun-ai-studio-runtime") -> None:
     Path(log_dir).mkdir(parents=True, exist_ok=True)
 
     max_bytes = int(_env("FUNAI_LOG_MAX_FILE_SIZE_BYTES", str(100 * 1024 * 1024)))
-    max_history = int(_env("FUNAI_LOG_MAX_HISTORY_DAYS", "30"))
+    max_history = int(_env("FUNAI_LOG_MAX_HISTORY_DAYS", "7"))
     total_cap = int(_env("FUNAI_LOG_TOTAL_SIZE_CAP_BYTES", str(5 * 1024 * 1024 * 1024)))
 
     root = logging.getLogger()
